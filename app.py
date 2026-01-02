@@ -2,7 +2,7 @@ import json
 import tkinter as tk
 from tkinter import ttk
 from tkinter.filedialog import askopenfilename, asksaveasfilename 
-#from functions import Functions
+
 
 # Functions
 # Function for the open file name
