@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinter.filedialog import askopenfilename 
-from tkinter.filedialog import asksaveasfilename
-# Functions
+from tkinter.filedialog import askopenfilename, asksaveasfilename 
 
+
+# Functions
 # Function for the open file name
 def open_file():
     # Open a Note doc for editing or reviewing
@@ -30,6 +30,9 @@ def save_file():
         output_file.write(md)
     window.title(f"MarkDown-Notes - {filepath}")
     
+def Show_Notes():
+    node.pack_forget()
+        
 
 window = tk.Tk() # Make the Window
 window.title("MarkDown-Note")
@@ -43,6 +46,9 @@ md_edit = tk.Text(window)
 frm_buttons = tk.Frame(window, relief=tk.RAISED, bd=2)
 btn_open = tk.Button(frm_buttons, text="Open file", command=open_file)
 btn_save = tk.Button(frm_buttons, text="Save As", command=save_file)
+btn_notes = tk.Button(frm_buttons, text="Notes")
+
+node = btn_notes
 
 # placing the UI on th screen
 btn_open.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
@@ -50,6 +56,8 @@ btn_save.grid(row=1,column=0, sticky="ew", padx=5)
 
 frm_buttons.grid(row=0, column=0, sticky="ns")
 md_edit.grid(row=0, column=1, sticky="nsew")
+
+
 
 
 window.mainloop()
