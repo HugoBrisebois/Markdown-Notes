@@ -249,13 +249,127 @@ class MarkDownNotes(tk.Tk):
                 # Track changes
                 self.md_edit.bind('<<Modified>>', self.on_text_modified)
                 
-            def on_text_modified(self, event=None):
+            def on_text_modified(self):
                 """handle text modifications"""
                 if self.md_edit.edit_modified():
-                    pass
-        
-        
+                    self.unsaved_changes = True
+                    self.search_entry.select_range(0, tk.END)
+            
+            def focus_search(self, event):
+                """Focus the search entry"""
+                self.search_entry.focus_set()
+                self.search_entry.select_range(0,tk.END)
+                
+            def on_search_focus_in(self, event):
+                """Clear placeholder text if empty"""
+                if self.search_entry.get() == "Search notes":
+                    self.search_entry.delete(0, tk.END)
+                    self.search_entry.config(fg=colours['text'])
+                    
+            def on_search_focus_out(self,event):
+                """Restore placeholder text if empty"""
+                if not self.search_entry.get():
+                    self.search_entry.insert(0, "Search notes")
+                    self.search_entry.config(fg='gray')
+            
+            def filter_notes(self):
+                """Filter the notes based on search query"""
+                query = self.search_var.get().lower()
+                if query == "Search notes":
+                    query = ""
+                self.note_listbox.delete(0, tk.END)
+                
+                for note in self.notes_db:
+                    if query in note['title'].lower():
+                        display_text = f"{note['title']}\n{note['last_modified']}"
+                        self.notes_listbox.insert(tk.END, display_text)
+                        
+            def refresh_notes_list(self):
+                """Refresh the notes list from database"""
+                self.search_var.set("")
+                self.filter_notes()
+                
+            def on_note_selected(self, event):
+                """Handle note selection (single click)"""
+                pass
 
+                
+            def on_note_double_click(self,event):
+                """Handle double-click on note"""
+                selection = self.note_listbox.curselection()
+                if not selection:
+                    return
+
+                if self.unsaved_changes:
+                    response = messagebox.askyesnocanel(
+                        "unsaved changes",
+                        "you have unsaved changes. do you want to save them"
+                    )
+                    if response is None: # Cancel
+                        return
+                    elif response: # Yes
+                        self.save_file()
+                        
+                # Get the actual index from filtered results
+                index = selection[0]
+                display_text = self.notes_listbox.get(index)
+                title = display_text.split('\n')[0]
+                
+                # Find the note in the database
+                for note in self.notes_db:
+                    if note['title'] == title:
+                        self.load_note(note['filepath'])
+                        break
+                    
+            def load_notes_db(self):
+                """Load the notes database from a json file"""
+                if os.path.exists(NOTES_DB):
+                    try:
+                        with open(NOTES_DB, 'r', encoding='utf-8') as f:
+                            return json.load(f)
+                    except:
+                        return []
+                    return[]
+                
+            def save_notes_db(self):
+                """Save the notes database to json file"""
+                with open(NOTES_DB, 'w', encoding='utf-8') as f:
+                    json.dump(self.notes_db, f, indent=2)
+                    
+            def add_note_db(self, filepath, title=None):
+                """Add or update note in database"""
+                self.note_db = [n for n in self.note_db if n['filepath'] != filepath]
+                
+                if title is None:
+                    title = os.path.splittext(os.path.basename(filepath))[0]
+                    
+                note_entry = {
+                    'title': title,
+                    'filepath': filepath,
+                    'last_modified': datetime.now().strftime("%Y-%m-%d %H:%M")
+                }
+                self.note_db.insert(0, note_entry)
+                self.save_notes_db()
+                self.refresh_notes_list()
+                
+            def open_file(self):
+                """Open File Dialog"""
+                if self.unsaved_changes:
+                    response = messagebox.askyesnocancel(
+                        "Unsaved Changes",
+                        "You have unsaved changes. do you want to save them"
+                    )                
+                    if response is None:
+                        return
+                    elif response:
+                        self.save_file()
+                
+                
+                
+                
+                
+                
+            
 class view_notes(tk.Frame):
     def __init__(self, parent, controller): 
         tk.Frame.__init__(self, parent)
