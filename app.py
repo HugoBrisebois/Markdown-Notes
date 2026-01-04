@@ -5,9 +5,23 @@ import json
 import os
 from datetime import datetime
 
-# global variables
-LARGEFONT = ("Verdana", 25)
+"""Global Variables"""
+# Database
 NOTES_DB = "notes_database.json"
+# Colour Scheme
+colours= {
+    'bg': '#f5f5f5',
+    'sidebar_bg': '#2c3e50',
+    'sidebar_hover': '#34495e',
+    'sidebar_text': '#ecf0f1',
+    'editor_bg': '#ffffff',
+    'accent': '#3498db',
+    'accent_hover': '#2980b9',
+    'text': '#2c3e50',
+    'border': '#bdc3c7'
+}
+
+
 
  
 class MarkDownNotes(tk.Tk):
@@ -16,146 +30,231 @@ class MarkDownNotes(tk.Tk):
         
         tk.Tk.__init__(self, *args, **kwargs)
         
+        self.title("MarkDown-Notes")
+        self.geometry("1000x600")
+        self.minsize(800, 500)
+        
         # Set the window icon
         try:
-            icon = tk.PhotoImage(file='Markdown_notes_icon_256.png')
+            icon = tk.PhotoImage(file='Markdown_notes_256.png')
             self.iconphoto(False, icon)
         except:
-            print("Icon file not found or invalid format")
+            pass
         
-        # Initialize current filepath
+        # Initialize variables
         self.current_filepath = None
-        
-        # Load the Database with the notes path
         self.notes_db = self.load_notes_db()
+        self.unsaved_changes = False
+       
+       # Configure fonts
+        self.title_font = font.Font(family="Segoe UI", size=16, weight="bold")
+        self.normal_font = font.Font(family="Segeo UI", size=10)
+        self.button_font = font.Font(family="Segeo UI", size=9)
         
-        # creating a container
-        container = tk.Frame(self)  
-        container.pack(side = "top", fill = "both", expand = True) 
- 
-        container.grid_rowconfigure(0, weight = 1)
-        container.grid_columnconfigure(0, weight = 1)
- 
-        # initializing frames to an empty array
-        self.frames = {}  
- 
-        # Making frames through a tuple
-        for F in (edit_md, view_notes):
-            frame = F(container, self)
-            self.frames[F] = frame 
-            frame.grid(row = 0, column = 0, sticky ="nsew")
- 
-        self.show_frame(view_notes)
- 
-    def show_frame(self, cont):
-        frame = self.frames[cont]
-        # Refresh notes list
-        if cont == view_notes:
-            frame.refresh_notes_list()
-        frame.tkraise()
-    
-    def load_notes_db(self):
-        """Load the notes database from a json file"""
-        if os.path.exists(NOTES_DB):
-            try:
-                with open(NOTES_DB, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except:
-                return []
-        return []
-    
-    def save_notes_db(self):
-        """Save the notes database to JSON file"""
-        with open(NOTES_DB, 'w', encoding='utf-8') as f:
-            json.dump(self.notes_db, f, indent=2)
-    
-    def add_note_to_db(self, filepath, title=None):
-        """Add or save the notes to a json file"""
-        # Remove entry if it already exists
-        self.notes_db = [n for n in self.notes_db if n['filepath'] != filepath]
+        # Create UI
+        self.create_widget()
         
-        if title is None:
-            title = os.path.basename(filepath)
-    
-        # add a new entry
-        note_entry = {
-            'title': title,
-            'filepath': filepath,
-            'last_modified': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        self.notes_db.insert(0, note_entry)
-        self.save_notes_db()
-    
-    def open_file(self):
-        filepath = askopenfilename(filetypes=[("Text Files", "*.txt"), ("Markdown files", "*.md")])
-        if not filepath:
-            return
-        self.load_note(filepath)
-    
-    def load_note(self, filepath):
-        """Load a note from filepath"""
-        if not os.path.exists(filepath):
-            messagebox.showerror("Error", f"File not found: {filepath}")
-            return
+        # Bind keyboard shortcuts
+        self.bind('<Control-s>', lambda e: self.save_file())
+        self.bind('<Control-n>', lambda e: self.new_note())
+        self.bind('<Control-o>', lambda e: self.open_file())
+        self.bind('<Control-f>', lambda e: self.focus_search())
+        
+        # Handle window close
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        def create_widget(self):
+            """Create the UI"""
+            # Main Container
+            main_container = tk.Frame(self, bg = colours['bg'])
+            main_container.pack(fill='both', expand=True)
             
-        # Get the edit_md frame and its text widget
-        edit_frame = self.frames[edit_md]
-        edit_frame.md_edit.delete("1.0", tk.END)
-        
-        with open(filepath, mode="r", encoding="utf-8") as input_file:
-            text = input_file.read()
-            edit_frame.md_edit.insert(tk.END, text)
+            # Left sidebar (notes list)
+            self.create_sidebar(main_container)
             
-        self.current_filepath = filepath
-        self.title(f"MarkDown-notes - {filepath}")
-        
-        # Add to database
-        self.add_note_to_db(filepath)
-        
-        # Switch to edit view
-        self.show_frame(edit_md)
-        
-    def save_file(self):
-        if self.current_filepath:
-            # save to current file
-            self.save_to_filepath(self.current_filepath)
-        else:
-            # Save to a new file
-            self.save_file_as()
+            # Right sidebar
+            self.create_editor_panel(main_container)
             
-    def save_file_as(self):
-        filepath = asksaveasfilename(
-            defaultextension=".md",
-            filetypes=[("Text Files", "*.txt"), ("Markdown", "*.md")]
-        )
-        if not filepath:
-            return
-        
-        self.save_to_filepath(filepath)
-        
-    def save_to_filepath(self, filepath):
-        """Save current note to the specified filepath"""
-        # Get the edit_md frame and its text widget
-        edit_frame = self.frames[edit_md]
-        
-        with open(filepath, mode="w", encoding="utf-8") as output_file:
-            md = edit_frame.md_edit.get("1.0", tk.END)
-            output_file.write(md)
+        def create_sidebar(self, parent):
+            """Creae the left sidebar with notes list"""
+            sidebar = tk.Frame(parent, bg=colours['sidebar_bg'])
+            sidebar.pack(side='left', fill='both', padx=0, pady=0)
+            sidebar.pack_propagate(False)
             
-        self.current_filepath = filepath
-        self.title(f"MarkDown-Notes - {filepath}")
-        
-        # Add to database
-        self.add_note_to_db(filepath)
-        
-    def new_note(self):
-        """Create a new note"""
-        edit_frame = self.frames[edit_md]
-        edit_frame.md_edit.delete("1.0", tk.END)
-        self.current_filepath = None
-        self.title("MarkDown-Notes - New Note")
-        self.show_frame(edit_md)
+            # Header
+            header = tk.Frame(sidebar, bg=colours['sidebar_bg'])
+            header.pack(fill='x', padx=15, pady=15)
+            
+            title_label = tk.Label(
+                header,
+                text="Your Notes",
+                font=self.title_font,
+                bg = colours['sidebar_bg'],
+                fg=colours['sidebar_text']
+            )
+            
+            title_label.pack(anchor='w')
+            
+            # Search bar
+            search_frame = tk.Frame(sidebar, bg=colours['sidebar_bg'])
+            search_frame.pack(fill='x', padx=15, pady=(0, 10))
+            
+            self.search_var = tk.StringVar()
+            self.search_var.trace('w', lambda *args: self.filter_notes())
+            
+            self.search_entry = tk.Entry(
+                search_frame,
+                textvariable=self.search_var,
+                font=self.normal_font,
+                bg=colours['editor_bg'],
+                relief='flat',
+                insertbackground=colours['text']
+            )
+            self.search_entry.pack(fill='x', ipady=5)
+            self.search_entry.insert(0, "Search notes")
+            self.searsh_entry.bind("<FocusIn>", self.on_search_focus_in)
+            self.search_entry.bind("<FocusOut>", self.on_search_focus_out)
+            
+            # Action buttons
+            button_frame = tk.Frame(sidebar, bg=colours['sidebar_bg'])
+            button_frame.pack(fill='x', padx=15, pady=(0,10))
+            
+            new_btn = tk.Button(
+                button_frame,
+                text="New Note",
+                command=self.newnote,
+                font=self.button_font,
+                bg=colours['accent'],
+                fg='white',
+                relief='flat',
+                cursor='hand2',
+                padx=15,
+                pady=8
+            )
+            new_btn.pack(side='left', expand=True, fill='x', padx=(0,5))
+            new_btn.bind('<Enter>', lambda e: e.widget.cnfig(bg=colours['accent_hover']))
+            new_btn.bind('Leave', lambda e: e.widget.config(bg=colours['sidebar_hover']))
+            
+            # Notes Listbox
+            list_frame = tk.Frame(sidebar, bg=colours['sidebar_bg'])
+            list_frame.pack(fill="both", expand=True, padx=15, pady=(0,15))
+            
+            scrollbar = tk.Scrollbar(list_frame, bg=colours['sidebar_bg'])
+            scrollbar.pack(side="right", fill='y')
+            
+            self.notes_listbox = tk.Listbox(
+                list_frame,
+                font=self.normal_font,
+                bg=colours['sidebar_hover'],
+                fg=colours['sidebar_text'],
+                selectbackground=colours['accent'],
+                selectforeground='white',
+                relief='flat',
+                highlightthickness=0,
+                borderwidth=0,
+                yscrollcommand=scrollbar.set,
+                activestyle='none'
+            )
+            self.notes_listbox.pack(side='left', fill='both', expand=True)
+            scrollbar.config(command=self.notes_listbox.yview)
+            
+            self.note_listbox.bind('<<ListBoxSelect>>', self.on_note_select)
+            self.note_listbox.bind('<<Double-Button-1>>', self.on_note_double_click)
+            
+            self.refresh_notes_list()
+            
+            def create_editor_panel(self, parent):
+                """Create the right editor panel"""
+                editor_container = tk.Frame(parent, bg=colours['bg'])
+                editor_container.pack(side='right', fill='both', expand=True)
+                
+                # Toolbar
+                toolbar = tk.Frame(editor_container, bg=colours['bg'])
+                toolbar.pack(fill='x', padx=20, pady=(15,10))
+                
+                self.Current_file_label = tk.Label(
+                    toolbar,
+                    text="New Note",
+                    font=self.title_font,
+                    bg=colours['bg'],
+                    fg=colours['text']
+                )
+                self.current_file_label.pack(side='left')
+                
+                # save buttons
+                button_container = tk.Frame(toolbar, bg=colours['bg'])
+                button_container.pack(side='left')
+                
+                save_btn = tk.Button(
+                    button_container,
+                    text='save',
+                    command=self.save_file,
+                    font=self.button_font,
+                    bg=colours['accent'],
+                    fg='white',
+                    relief='flat',
+                    padx=20,
+                    pady=8
+                )
+                
+                save_btn.pack(side='left')
+                save_btn.bind('<Enter>', lambda e: e.widget.config(bg=colours['accent_hover']))
+                save_btn.bind('<Leave>', lambda e: e.widget.config(bg=colours['accent']))
 
+                save_as_btn = tk.Button(
+                    button_container,
+                    text='Save As',
+                    command=self.save_file_as,
+                    font=self.button_font,
+                    bg=colours['border'],
+                    fg=colours['text'],
+                    relief='flat',
+                    cursor='hand2',
+                    padx=20,
+                    pady=8
+                )
+                save_as_btn.pack(side='left')
+                save_as_btn.bind('<Enter>', lambda e: e.widget.config(bg='#95a5a6'))
+                save_as_btn.bind('Leave', lambda e: e.widget.config(bg=colours['border']))
+                
+                # Text editor
+                editor_frame = tk.Frame(editor_container, bg=colours['bg'])
+                editor_frame.pack(fill='both', expand=True, bg=colours['bg'])
+                
+                self.md_edit = tk.Text(
+                    editor_frame,
+                    wrap='word',
+                    font=('consolas', 11),
+                    bg=colours['editor_bg'],
+                    fg=colours['text'],
+                    relief='relief',
+                    borderwidth=0,
+                    padx=15,
+                    pady=15,
+                    insertbackground=colours['accent'],
+                    selectbackground=colours['accent'],
+                    selectforeground='white',
+                    undo=True,
+                    maxundo=-1
+                )
+                self.md_edit.pack(side='left', fill='both', expand=True)
+                
+                # Add border effect
+                editor_frame.config(highlightbackground=colours['border'], highlightthickness=1)
+                
+                scrollbar = tk.Scrollbar(editor_frame, command=self.md_edit.yview)
+                scrollbar.pack(side='right', fill='y')
+                self.md_edit.config(yscrollcommand=scrollbar.set)
+                
+                # Track changes
+                self.md_edit.bind('<<Modified>>', self.on_text_modified)
+                
+            def on_text_modified(self, event=None):
+                """handle text modifications"""
+                if self.md_edit.edit_modified():
+                    pass
+        
+        
 
 class view_notes(tk.Frame):
     def __init__(self, parent, controller): 
@@ -163,7 +262,7 @@ class view_notes(tk.Frame):
         self.controller = controller
         
         # label for the view notes frame
-        label = ttk.Label(self, text="Your Notes", font=LARGEFONT)
+        label = ttk.Label(self, text="Your Notes")
         label.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
         
         # Buttons
@@ -229,7 +328,7 @@ class edit_md(tk.Frame):
         tk.Frame.__init__(self, parent)
         self.controller = controller
         
-        label = ttk.Label(self, text="Edit Note", font=LARGEFONT)
+        label = ttk.Label(self, text="Edit Note")
         label.grid(row=0, column=1, padx=10, pady=10)
  
         # Buttons
