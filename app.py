@@ -34,8 +34,7 @@ class MarkDownNotes(tk.Tk):
         
         # Set icon
         try:
-            icon = tk.PhotoImage(file='Markdown_notes_icon_256.png')
-            self.iconphoto(False, icon)
+            self.iconbitmap('markdown_notes_icon_256.ico')
         except:
             pass
         
